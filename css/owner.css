@@ -856,3 +856,109 @@ body {
   font-size: 2.5rem;
   margin-bottom: 12px;
 }
+
+/* Customer QR scanner tab */
+.scan-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .scan-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scan-camera-card,
+.scan-result-card {
+  border-radius: 20px;
+  padding: 28px;
+}
+
+.scan-camera-card h3 {
+  font-size: 1.25rem;
+  margin-bottom: 8px;
+}
+
+.scan-hint {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.scan-hint strong {
+  color: var(--primary);
+}
+
+.qr-reader-box {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto 16px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+  min-height: 280px;
+}
+
+.scan-controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.scan-result-card {
+  text-align: center;
+  transition: border-color 0.3s;
+}
+
+.scan-result-card.success {
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.scan-result-card.error {
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.scan-result-card.warn {
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.scan-result-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.scan-result-card.success .scan-result-icon {
+  color: var(--success);
+}
+
+.scan-result-card.error .scan-result-icon {
+  color: var(--danger);
+}
+
+.scan-result-card.warn .scan-result-icon {
+  color: #f59e0b;
+}
+
+.scan-result-card h3 {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+#scan-result-message {
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.scan-result-stamps {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}

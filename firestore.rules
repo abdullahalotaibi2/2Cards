@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isCafeOwner(cafeId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/cafes/$(cafeId))
+        && get(/databases/$(database)/documents/cafes/$(cafeId)).data.ownerUid == request.auth.uid;
+    }
+
+    // Cafe branding — readable by everyone (customer portal)
+    match /cafes/{cafeId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+
+    // Customer loyalty records — must persist in Firestore
+    match /customers/{userId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId
+        || isCafeOwner(resource.data.cafeId)
+      );
+
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.cafeId is string
+        && request.resource.data.stampsCount == 0;
+
+      // Owner adjusts stamps; customer cannot change stamp count
+      allow update: if request.auth != null && (
+        isCafeOwner(resource.data.cafeId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.cafeId == resource.data.cafeId
+        && request.resource.data.email == resource.data.email
+      );
+    }
+  }
+}

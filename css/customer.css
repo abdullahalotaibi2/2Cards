@@ -378,6 +378,95 @@ body {
   line-height: 1.4;
 }
 
+/* Customer personal scan QR */
+.customer-qr-section {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+}
+
+.customer-qr-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.customer-qr-wrap {
+  display: inline-flex;
+  justify-content: center;
+  padding: 10px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.customer-qr-wrap img,
+.customer-qr-wrap canvas {
+  display: block;
+}
+
+.customer-qr-sub {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.scan-success-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.08));
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  border-radius: 14px;
+  animation: toastIn 0.4s ease;
+}
+
+.scan-success-toast .toast-icon {
+  font-size: 1.5rem;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 185, 129, 0.25);
+  border-radius: 50%;
+  color: #34d399;
+  font-weight: 800;
+}
+
+.scan-success-toast strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #34d399;
+  margin-bottom: 2px;
+}
+
+.scan-success-toast p {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card-panel.stamp-pulse {
+  animation: cardPulse 0.8s ease;
+}
+
+@keyframes cardPulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.35); }
+}
+
 /* Account operations / Logouts */
 .account-actions {
   border-top: 1px solid var(--border-color);

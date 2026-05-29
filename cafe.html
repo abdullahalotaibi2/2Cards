@@ -10,6 +10,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- Stylesheets -->
   <link rel="stylesheet" href="css/customer.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    if (window.location.protocol === 'file:') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:#0b0f19;color:#fff;z-index:999999;display:flex;flex-direction:column;justify-content:center;align-items:center;font-family:Outfit,sans-serif;padding:30px;text-align:center';
+        overlay.innerHTML = '<div style="font-size:3rem;margin-bottom:20px">⚠️</div><h2 style="color:#f25c54;margin-bottom:12px">افتح الموقع عبر سيرفر محلي</h2><p style="color:#94a3b8;max-width:520px;line-height:1.6">لا تفتح الملف مباشرة (file://). شغّل: <code style="color:#f8ad9d">npx http-server -p 3000</code> ثم افتح <a href="http://localhost:3000/cafe.html" style="color:#f25c54">localhost:3000</a></p>';
+        document.body.appendChild(overlay);
+      });
+    }
+  </script>
 </head>
 <body>
 
@@ -102,6 +113,20 @@
         <div class="reward-star">🏆</div>
         <h3>REWARD READY!</h3>
         <p>Show this screen to the cashier at checkout to claim your reward.</p>
+      </div>
+
+      <div class="customer-qr-section">
+        <p class="customer-qr-label">باركودك الخاص — اعرضه للكاشير</p>
+        <div id="customer-qr-wrap" class="customer-qr-wrap"></div>
+        <p class="customer-qr-sub">باركود منفصل لكل زبون · لا تشاركه مع غيرك</p>
+      </div>
+
+      <div id="scan-success-toast" class="scan-success-toast hidden">
+        <span class="toast-icon">✓</span>
+        <div>
+          <strong>تم تسجيل الزيارة!</strong>
+          <p id="scan-toast-message">أُضيف طابع واحد</p>
+        </div>
       </div>
 
       <div class="account-actions">

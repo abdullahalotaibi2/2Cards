@@ -1,8 +1,25 @@
 // customer.js - Customer Portal Controller
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as authSignOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as authSignOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { auth, db } from "./firebase-config.js";
+import {
+  saveCustomerCache,
+  loadCustomerCache,
+  clearCustomerCache,
+  saveLastCafeId
+} from "./persistence.js";
+import { buildCustomerScanPayload } from "./scan-code.js";
 
 // DOM - Navigation/Structure Panels
 const loader = document.getElementById("loader");
@@ -34,26 +51,41 @@ const stampsStatusLabel = document.getElementById("stamps-status-label");
 const rewardEarnedContainer = document.getElementById("reward-earned-container");
 const customerEmailDisplay = document.getElementById("customer-email-display");
 const customerLogoutBtn = document.getElementById("customer-logout-btn");
+const customerQrWrap = document.getElementById("customer-qr-wrap");
+const scanSuccessToast = document.getElementById("scan-success-toast");
+const scanToastMessage = document.getElementById("scan-toast-message");
 
 // Global states
 let cafeSlug = "";
 let cafeData = null;
 let unsubCardListener = null;
+let customerQrInstance = null;
+let lastSeenScanId = null;
+let scanNotificationsReady = false;
+let scanToastTimer = null;
 
 // ================= 1. URL ID PROCESSING =================
 function getCafeSlugFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  return params.get("id")?.trim(); // Matches ?id=cafe-slug
+  return params.get("id")?.trim();
+}
+
+function getCachedOrNull(uid) {
+  const cached = loadCustomerCache(cafeSlug, uid);
+  if (!cached || cached.cafeId !== cafeSlug) return null;
+  return cached;
 }
 
 // Load Cafe configurations & skins
 async function initializeCustomerPortal() {
   cafeSlug = getCafeSlugFromUrl();
-  
+
   if (!cafeSlug) {
     showErrorScreen();
     return;
   }
+
+  saveLastCafeId(cafeSlug);
 
   try {
     const docRef = doc(db, "cafes", cafeSlug);
@@ -62,8 +94,6 @@ async function initializeCustomerPortal() {
     if (docSnap.exists()) {
       cafeData = docSnap.data();
       applyBranding(cafeData);
-      
-      // Hook up Auth Observer once Tenant configuration is confirmed
       observeCustomerSession();
     } else {
       showErrorScreen();
@@ -74,22 +104,18 @@ async function initializeCustomerPortal() {
   }
 }
 
-// Inject Firestore styles into DOM CSS variables
 function applyBranding(data) {
   const root = document.documentElement;
   const theme = data.theme || {};
 
-  // Custom variables updates
   if (theme.primaryColor) root.style.setProperty("--primary-color", theme.primaryColor);
   if (theme.secondaryColor) root.style.setProperty("--secondary-color", theme.secondaryColor);
   if (theme.bgColor) root.style.setProperty("--bg-color", theme.bgColor);
   if (theme.textColor) root.style.setProperty("--text-color", theme.textColor);
 
-  // Set titles
   cafeNameEl.textContent = data.name;
   rewardDescription.textContent = data.cardSettings?.rewardDescription || "Free Loyalty Reward!";
 
-  // Logo rendering
   if (theme.logoUrl) {
     cafeLogoImg.src = theme.logoUrl;
     cafeLogoImg.classList.remove("hidden");
@@ -104,82 +130,178 @@ function applyBranding(data) {
 // ================= 2. AUTH STATE TRACKER =================
 function observeCustomerSession() {
   onAuthStateChanged(auth, async (user) => {
-    // Unsubscribe from previous updates if any
     if (unsubCardListener) {
       unsubCardListener();
       unsubCardListener = null;
     }
 
     if (!user) {
-      // Show Authentication card
       cardPanel.classList.add("hidden");
       authPanel.classList.remove("hidden");
       hideLoader();
-    } else {
-      // Validate customer scoping
-      const custDocRef = doc(db, "customers", user.uid);
+      return;
+    }
+
+    // Show saved card immediately on refresh while Firestore loads
+    const cached = loadCustomerCache(cafeSlug, user.uid);
+    if (cached && cached.cafeId === cafeSlug) {
+      showCardShell(user);
+      renderStampCard(cached);
+      hideLoader();
+    }
+
+    const custDocRef = doc(db, "customers", user.uid);
+
+    try {
       const custSnap = await getDoc(custDocRef);
 
       if (custSnap.exists()) {
         const customerData = custSnap.data();
-        
-        // Multi-tenant check: email credentials matching this specific cafe scope only
+
         if (customerData.cafeId !== cafeSlug) {
           console.warn("Tenant Mismatch. Logging customer out.");
-          showAuthError(`This account is registered for another cafe. Please create a new account for ${cafeData.name}.`);
+          showAuthError(
+            `This account is registered for another cafe. Please create a new account for ${cafeData.name}.`
+          );
           await authSignOut(auth);
           return;
         }
 
-        // Correctly scoped tenant, initialize card listener
+        saveCustomerCache(cafeSlug, user.uid, customerData);
         startCardRealTimeListener(user);
-      } else {
-        // Handle scenario where Auth user exists but Firestore customer document is missing. Create it.
-        try {
-          await setDoc(custDocRef, {
-            uid: user.uid,
-            email: user.email,
-            cafeId: cafeSlug,
-            stampsCount: 0,
-            createdAt: new Date()
-          });
-          startCardRealTimeListener(user);
-        } catch (err) {
-          console.error("Firestore customer account creation failed:", err);
-          showAuthError("Database access error: " + err.message);
-          await authSignOut(auth);
-        }
+        return;
       }
+
+      // Auth exists but Firestore doc missing — restore stamps from local backup
+      const restoredStamps = cached?.stampsCount ?? 0;
+      const newCustomer = {
+        uid: user.uid,
+        email: user.email,
+        cafeId: cafeSlug,
+        stampsCount: restoredStamps,
+        createdAt: serverTimestamp()
+      };
+
+      await setDoc(custDocRef, newCustomer);
+      const verified = await getDoc(custDocRef);
+      if (!verified.exists()) {
+        throw new Error("Could not save your account. Please try again.");
+      }
+
+      saveCustomerCache(cafeSlug, user.uid, verified.data());
+      startCardRealTimeListener(user);
+    } catch (err) {
+      console.error("Session restore failed:", err);
+
+      if (cached && cached.cafeId === cafeSlug) {
+        showCardShell(user);
+        renderStampCard(cached);
+        hideLoader();
+        showAuthError("Saved offline — reconnecting to sync your stamps...");
+        startCardRealTimeListener(user);
+        return;
+      }
+
+      showAuthError("Database access error: " + err.message);
+      hideLoader();
     }
   });
 }
 
-// Start listener for real-time stamp updates
-function startCardRealTimeListener(user) {
+function showCardShell(user) {
   authPanel.classList.add("hidden");
   cardPanel.classList.remove("hidden");
-  customerEmailDisplay.textContent = user.email;
+  customerEmailDisplay.textContent = user.email || cachedEmailFallback(user.uid);
+}
 
-  unsubCardListener = onSnapshot(doc(db, "customers", user.uid), (docSnap) => {
-    if (!docSnap.exists()) return;
-    const custData = docSnap.data();
-    renderStampCard(custData);
-    hideLoader();
-  }, (err) => {
-    console.error("Stamps listener error:", err);
-    showAuthError("Database Access Error: " + err.message);
+function cachedEmailFallback(uid) {
+  const c = loadCustomerCache(cafeSlug, uid);
+  return c?.email || "...";
+}
+
+function renderCustomerQR(user) {
+  if (!customerQrWrap || typeof QRCode === "undefined") return;
+
+  const payload = buildCustomerScanPayload(cafeSlug, user.uid);
+  customerQrWrap.innerHTML = "";
+
+  customerQrInstance = new QRCode(customerQrWrap, {
+    text: payload,
+    width: 168,
+    height: 168,
+    colorDark: "#0b0f19",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.H
   });
+}
+
+function showScanSuccessToast(stampsCount) {
+  if (!scanSuccessToast) return;
+
+  const total = cafeData?.cardSettings?.totalStamps || 8;
+  scanToastMessage.textContent = `أُضيف طابع واحد — لديك الآن ${stampsCount} / ${total}`;
+  scanSuccessToast.classList.remove("hidden");
+
+  if (scanToastTimer) clearTimeout(scanToastTimer);
+  scanToastTimer = setTimeout(() => {
+    scanSuccessToast.classList.add("hidden");
+  }, 6000);
+}
+
+function handleScanNotification(custData) {
+  const scanId = custData.lastScanId;
+  if (!scanId) return;
+
+  if (scanNotificationsReady && scanId !== lastSeenScanId) {
+    showScanSuccessToast(custData.stampsCount || 0);
+    cardPanel.classList.add("stamp-pulse");
+    setTimeout(() => cardPanel.classList.remove("stamp-pulse"), 800);
+  }
+
+  lastSeenScanId = scanId;
+  scanNotificationsReady = true;
+}
+
+function startCardRealTimeListener(user) {
+  showCardShell(user);
+  renderCustomerQR(user);
+
+  unsubCardListener = onSnapshot(
+    doc(db, "customers", user.uid),
+    (docSnap) => {
+      if (!docSnap.exists()) return;
+      const custData = docSnap.data();
+
+      if (custData.cafeId !== cafeSlug) return;
+
+      saveCustomerCache(cafeSlug, user.uid, custData);
+      renderStampCard(custData);
+      handleScanNotification(custData);
+      hideLoader();
+      authError.classList.add("hidden");
+    },
+    (err) => {
+      console.error("Stamps listener error:", err);
+      const cached = loadCustomerCache(cafeSlug, user.uid);
+      if (cached) {
+        renderStampCard(cached);
+        hideLoader();
+        showAuthError("Showing saved stamps — sync will resume when online.");
+      } else {
+        showAuthError("Database access error: " + err.message);
+      }
+    }
+  );
 }
 
 // ================= 3. RENDER LOYALTY GRID =================
 function renderStampCard(custData) {
   stampsGrid.innerHTML = "";
   const currentStamps = custData.stampsCount || 0;
-  const cardSettings = cafeData.cardSettings || {};
+  const cardSettings = cafeData?.cardSettings || {};
   const total = cardSettings.totalStamps || 8;
   const icon = cardSettings.stampIcon || "☕";
 
-  // Build stamp node elements
   for (let i = 1; i <= total; i++) {
     const slot = document.createElement("div");
     slot.classList.add("stamp-slot");
@@ -193,12 +315,10 @@ function renderStampCard(custData) {
     stampsGrid.appendChild(slot);
   }
 
-  // Progress Bar rendering
   const progressPercent = Math.min(100, (currentStamps / total) * 100);
   progressBarFill.style.width = `${progressPercent}%`;
   stampsStatusLabel.textContent = `${currentStamps} / ${total} Stamps Collected`;
 
-  // Check reward availability
   if (currentStamps >= total) {
     rewardEarnedContainer.classList.remove("hidden");
   } else {
@@ -207,7 +327,6 @@ function renderStampCard(custData) {
 }
 
 // ================= 4. AUTH ACTION HANDLERS =================
-// Form Toggling
 toggleSignInBtn.addEventListener("click", () => {
   toggleSignInBtn.classList.add("active");
   toggleSignUpBtn.classList.remove("active");
@@ -224,7 +343,6 @@ toggleSignUpBtn.addEventListener("click", () => {
   authError.classList.add("hidden");
 });
 
-// Login submission
 signInForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   authError.classList.add("hidden");
@@ -242,7 +360,6 @@ signInForm.addEventListener("submit", async (e) => {
   }
 });
 
-// Register submission
 signUpForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   authError.classList.add("hidden");
@@ -252,18 +369,28 @@ signUpForm.addEventListener("submit", async (e) => {
   const password = signupPassword.value;
 
   try {
-    // 1. Create Auth user
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     const uid = credential.user.uid;
 
-    // 2. Add customer scoped document to database
-    await setDoc(doc(db, "customers", uid), {
-      uid: uid,
-      email: email,
+    const customerRecord = {
+      uid,
+      email,
       cafeId: cafeSlug,
       stampsCount: 0,
-      createdAt: new Date()
-    });
+      createdAt: serverTimestamp()
+    };
+
+    // Save locally first so refresh right after signup still shows the account
+    saveCustomerCache(cafeSlug, uid, customerRecord);
+
+    await setDoc(doc(db, "customers", uid), customerRecord);
+
+    const verified = await getDoc(doc(db, "customers", uid));
+    if (!verified.exists()) {
+      throw new Error("Registration saved locally but cloud sync failed. Refresh to retry.");
+    }
+
+    saveCustomerCache(cafeSlug, uid, verified.data());
   } catch (err) {
     console.error(err);
     hideLoader();
@@ -271,11 +398,12 @@ signUpForm.addEventListener("submit", async (e) => {
   }
 });
 
-// Logout Handler
 customerLogoutBtn.addEventListener("click", async () => {
   showLoaderOverlay();
+  const uid = auth.currentUser?.uid;
   try {
     await authSignOut(auth);
+    if (uid) clearCustomerCache(cafeSlug, uid);
   } catch (err) {
     console.error("Sign out failed:", err);
   } finally {
@@ -304,5 +432,4 @@ function showAuthError(msg) {
   authError.classList.remove("hidden");
 }
 
-// Execute initializers
 window.addEventListener("DOMContentLoaded", initializeCustomerPortal);

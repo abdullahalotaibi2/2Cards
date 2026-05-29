@@ -1,7 +1,18 @@
 // owner.js - Cafe Owner Controller
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut as authSignOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, doc, updateDoc, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { signInWithEmailAndPassword, signOut as authSignOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import {
+  doc,
+  updateDoc,
+  getDoc,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  runTransaction,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { saveCustomerCache } from "./persistence.js";
+import { parseCustomerScanPayload } from "./scan-code.js";
 import { auth, db } from "./firebase-config.js";
 
 // DOM - Auth Views
@@ -64,11 +75,27 @@ const qrcodeDisplay = document.getElementById("qrcode-display");
 const downloadQrBtn = document.getElementById("download-qr-btn");
 const qrCafeLabel = document.getElementById("qr-cafe-label");
 
+// DOM - Customer QR Scanner
+const startScannerBtn = document.getElementById("start-scanner-btn");
+const stopScannerBtn = document.getElementById("stop-scanner-btn");
+const scanResultPanel = document.getElementById("scan-result-panel");
+const scanResultIcon = document.getElementById("scan-result-icon");
+const scanResultTitle = document.getElementById("scan-result-title");
+const scanResultMessage = document.getElementById("scan-result-message");
+const scanResultStamps = document.getElementById("scan-result-stamps");
+
 // Global State Variables
 let currentCafe = null;
 let currentCafeSlug = "";
 let qrcodeInstance = null;
 let allCustomers = [];
+
+// Scanner state
+let html5QrCode = null;
+let scannerRunning = false;
+let scanProcessing = false;
+const recentScanGuard = new Map();
+const SCAN_COOLDOWN_MS = 5000;
 
 // ================= 1. AUTH STATE OBSERVER =================
 onAuthStateChanged(auth, (user) => {
@@ -166,6 +193,11 @@ tabButtons.forEach(btn => {
     // Extra actions for specific tabs
     if (tabName === "qrcode") {
       generateQRCodePortal();
+    }
+    if (tabName === "scan") {
+      /* scanner started manually */
+    } else {
+      stopOwnerScanner();
     }
   });
 });
@@ -419,6 +451,165 @@ customerSearchInput.addEventListener("input", () => {
   renderCustomersTable(allCustomers);
 });
 
+// Award exactly one stamp from a successful QR scan
+async function awardStampFromScan(customerUid) {
+  const maxStamps = currentCafe?.cardSettings?.totalStamps || 8;
+
+  const result = await runTransaction(db, async (transaction) => {
+    const customerRef = doc(db, "customers", customerUid);
+    const snap = await transaction.get(customerRef);
+
+    if (!snap.exists()) {
+      throw new Error("الزبون غير مسجل في النظام.");
+    }
+
+    const data = snap.data();
+    if (data.cafeId !== currentCafeSlug) {
+      throw new Error("هذا الباركود تابع لمقهى آخر.");
+    }
+
+    const current = data.stampsCount || 0;
+    if (current >= maxStamps) {
+      throw new Error("البطاقة مكتملة — أعد تعيينها قبل مسح جديد.");
+    }
+
+    const newCount = current + 1;
+    const scanId = `scan_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    transaction.update(customerRef, {
+      stampsCount: newCount,
+      lastScanAt: serverTimestamp(),
+      lastScanId: scanId
+    });
+
+    return { email: data.email, newCount, scanId, maxStamps };
+  });
+
+  saveCustomerCache(currentCafeSlug, customerUid, {
+    uid: customerUid,
+    email: result.email,
+    cafeId: currentCafeSlug,
+    stampsCount: result.newCount
+  });
+
+  const idx = allCustomers.findIndex((c) => c.uid === customerUid);
+  if (idx !== -1) allCustomers[idx].stampsCount = result.newCount;
+
+  return result;
+}
+
+function showScanResult(type, title, message, stampsLine = "") {
+  scanResultPanel.classList.remove("hidden", "success", "error", "warn");
+  scanResultPanel.classList.add(type);
+
+  if (type === "success") {
+    scanResultIcon.textContent = "✓";
+    scanResultTitle.textContent = title || "تم المسح بنجاح";
+  } else if (type === "warn") {
+    scanResultIcon.textContent = "⏳";
+    scanResultTitle.textContent = title || "انتظر قليلاً";
+  } else {
+    scanResultIcon.textContent = "✕";
+    scanResultTitle.textContent = title || "فشل المسح";
+  }
+
+  scanResultMessage.textContent = message;
+  scanResultStamps.textContent = stampsLine;
+}
+
+async function processCustomerScan(decodedText) {
+  const parsed = parseCustomerScanPayload(decodedText);
+  if (!parsed) {
+    showScanResult("error", "باركود غير صالح", "هذا ليس باركود زبون 22Card.");
+    return;
+  }
+
+  if (parsed.cafeId !== currentCafeSlug) {
+    showScanResult("error", "مقهى خاطئ", "هذا الزبون مسجل عند مقهى آخر.");
+    return;
+  }
+
+  const lastScan = recentScanGuard.get(parsed.customerUid);
+  if (lastScan && Date.now() - lastScan < SCAN_COOLDOWN_MS) {
+    showScanResult("warn", "مسح مكرر", "تم احتساب طابع لهذا الزبون للتو. انتظر بضع ثوانٍ.");
+    return;
+  }
+
+  try {
+    const result = await awardStampFromScan(parsed.customerUid);
+    recentScanGuard.set(parsed.customerUid, Date.now());
+
+    showScanResult(
+      "success",
+      "تم تسجيل الزيارة ✓",
+      `${result.email}`,
+      `الطوابع الآن: ${result.newCount} / ${result.maxStamps}`
+    );
+  } catch (err) {
+    console.error(err);
+    showScanResult("error", "لم يُحتسب الطابع", err.message);
+  }
+}
+
+async function startOwnerScanner() {
+  if (scannerRunning || !window.Html5Qrcode) {
+    if (!window.Html5Qrcode) alert("مكتبة المسح لم تُحمّل. تحقق من الاتصال بالإنترنت.");
+    return;
+  }
+
+  try {
+    html5QrCode = new Html5Qrcode("owner-qr-reader");
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 260, height: 260 } },
+      async (decodedText) => {
+        if (scanProcessing) return;
+        scanProcessing = true;
+        try {
+          if (html5QrCode) await html5QrCode.pause(true);
+          await processCustomerScan(decodedText);
+        } finally {
+          setTimeout(async () => {
+            scanProcessing = false;
+            if (html5QrCode && scannerRunning) {
+              try {
+                await html5QrCode.resume();
+              } catch (e) {
+                console.warn(e);
+              }
+            }
+          }, SCAN_COOLDOWN_MS);
+        }
+      },
+      () => {}
+    );
+    scannerRunning = true;
+    startScannerBtn.classList.add("hidden");
+    stopScannerBtn.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    alert("تعذّر تشغيل الكاميرا: " + err.message + "\nاسمح بالوصول للكاميرا من إعدادات المتصفح.");
+  }
+}
+
+async function stopOwnerScanner() {
+  if (!html5QrCode || !scannerRunning) return;
+  try {
+    await html5QrCode.stop();
+    html5QrCode.clear();
+  } catch (err) {
+    console.warn(err);
+  }
+  html5QrCode = null;
+  scannerRunning = false;
+  scanProcessing = false;
+  startScannerBtn.classList.remove("hidden");
+  stopScannerBtn.classList.add("hidden");
+}
+
+startScannerBtn?.addEventListener("click", startOwnerScanner);
+stopScannerBtn?.addEventListener("click", stopOwnerScanner);
+
 // Update Customer stamp value in Firestore
 async function updateCustomerStamps(customer, action) {
   const maxStamps = currentCafe ? (currentCafe.cardSettings.totalStamps || 8) : 8;
@@ -438,21 +629,24 @@ async function updateCustomerStamps(customer, action) {
   }
 
   try {
-    const docRef = doc(db, "customers", customer.uid);
-    
-    // Add dynamic logs to customer transaction history array
-    const transaction = {
-      transactionId: "tx_" + Date.now(),
-      stampsEarned: action === "add" ? 1 : action === "remove" ? -1 : -customer.stampsCount,
-      issuedAt: new Date(),
-      issuedBy: auth.currentUser.uid
-    };
-
-    await updateDoc(docRef, {
-      stampsCount: newCount
-      // Optional audit logging:
-      // stampsHistory: arrayUnion(transaction)
+    const customerRef = doc(db, "customers", customer.uid);
+    await updateDoc(customerRef, {
+      stampsCount: newCount,
+      lastScanAt: serverTimestamp(),
+      lastScanId: `manual_${Date.now()}`
     });
+
+    const verified = await getDoc(customerRef);
+    if (!verified.exists()) {
+      throw new Error("Stamp update could not be verified.");
+    }
+
+    const saved = verified.data();
+    saveCustomerCache(currentCafeSlug, customer.uid, saved);
+
+    customer.stampsCount = newCount;
+    const idx = allCustomers.findIndex((c) => c.uid === customer.uid);
+    if (idx !== -1) allCustomers[idx].stampsCount = newCount;
   } catch (err) {
     alert("Stamps update failed: " + err.message);
   }

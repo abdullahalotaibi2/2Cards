@@ -53,8 +53,9 @@
       });
     }
   </script>
-  <!-- QRCode.js Library via CDN -->
+  <!-- QRCode.js + Camera scanner -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body class="owner-body">
 
@@ -104,6 +105,7 @@
       </div>
       <div class="nav-tabs">
         <button class="tab-btn active" data-tab="overview">📊 Overview</button>
+        <button class="tab-btn" data-tab="scan">📷 مسح الزبون</button>
         <button class="tab-btn" data-tab="branding">🎨 Branding & Card</button>
         <button class="tab-btn" data-tab="customers">👥 Customers</button>
         <button class="tab-btn" data-tab="qrcode">🔲 QR Code Link</button>
@@ -153,7 +155,8 @@
                 <li>Go to the <strong>Branding & Card</strong> tab to customize colors, choose a stamp icon, and set your rewards description.</li>
                 <li>Visit the <strong>QR Code Link</strong> tab, download your QR code, and print it at your register.</li>
                 <li>When customers scan it, they can register in seconds under your cafe's brand scope.</li>
-                <li>Go to the <strong>Customers</strong> tab to search profiles and increment stamps when customers make a purchase!</li>
+                <li>Use <strong>مسح الزبون</strong> to scan each customer's personal QR — one stamp per scan.</li>
+                <li>Or go to <strong>Customers</strong> to adjust stamps manually.</li>
               </ol>
             </div>
           </div>
@@ -164,6 +167,27 @@
               <input type="text" id="loyalty-url-display" readonly value="Loading link...">
               <button id="copy-url-btn">Copy Link</button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: SCAN CUSTOMER QR -->
+      <section id="tab-scan" class="tab-panel">
+        <div class="scan-layout">
+          <div class="glass scan-camera-card">
+            <h3>📷 مسح باركود الزبون</h3>
+            <p class="scan-hint">كل زبون له باركود خاص — لا يُستخدم لغيره. كل مسح ناجح = <strong>طابع واحد فقط</strong>.</p>
+            <div id="owner-qr-reader" class="qr-reader-box"></div>
+            <div class="scan-controls">
+              <button type="button" id="start-scanner-btn" class="btn-primary">تشغيل الكاميرا</button>
+              <button type="button" id="stop-scanner-btn" class="btn-secondary hidden">إيقاف الكاميرا</button>
+            </div>
+          </div>
+          <div id="scan-result-panel" class="glass scan-result-card hidden">
+            <div id="scan-result-icon" class="scan-result-icon">✓</div>
+            <h3 id="scan-result-title">تم المسح</h3>
+            <p id="scan-result-message"></p>
+            <p id="scan-result-stamps" class="scan-result-stamps"></p>
           </div>
         </div>
       </section>
