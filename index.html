@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>22Card - Super Admin Gateway</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/admin.css">
+  <!-- Local file security check -->
+  <script>
+    if (window.location.protocol === 'file:') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.background = '#0b0f19';
+        overlay.style.color = '#fff';
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.fontFamily = "'Outfit', sans-serif";
+        overlay.style.padding = '30px';
+        overlay.style.textAlign = 'center';
+        overlay.innerHTML = `
+          <div style="font-size:3.5rem;margin-bottom:20px;filter:drop-shadow(0 0 10px rgba(242,92,84,0.5));">⚠️</div>
+          <h2 style="margin-bottom:15px;color:#f25c54;font-size:1.8rem;font-weight:700;">خطأ أمني في المتصفح (Browser CORS Block)</h2>
+          <p style="max-width:600px;line-height:1.6;color:#94a3b8;margin-bottom:25px;font-size:1.05rem;">
+            لقد قمت بفتح هذا الملف مباشرة بالنقر المزدوج (بروتوكول <code style="color:#f8ad9d;background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;font-family:monospace;">file://</code>). 
+            المتصفحات الحديثة تمنع تشغيل وحدات Firebase البرمجية بشكل مباشر لأسباب أمنية.
+          </p>
+          <div style="background:rgba(255,255,255,0.03);padding:20px 25px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);margin-bottom:25px;text-align:left;font-family:monospace;max-width:500px;width:100%;">
+            <p style="color:#10b981;margin-bottom:8px;font-weight:bold;"># لتشغيل البرنامج محلياً بشكل صحيح:</p>
+            <p style="color:#e2e8f0;margin-bottom:4px;font-size:0.9rem;">1. افتح موجه الأوامر (CMD / PowerShell) في مجلد المشروع.</p>
+            <p style="color:#e2e8f0;margin-bottom:12px;font-size:0.9rem;">2. قم بتشغيل الخادم المحلي بالأمر التالي:</p>
+            <div style="background:rgba(0,0,0,0.4);padding:10px 15px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);color:#fff;margin-bottom:12px;user-select:all;cursor:pointer;">
+              npx http-server -p 3000
+            </div>
+            <p style="color:#e2e8f0;font-size:0.9rem;">3. افتح الرابط التالي في المتصفح:</p>
+            <a href="http://localhost:3000" target="_blank" style="color:#f25c54;text-decoration:underline;font-weight:bold;font-size:0.95rem;">http://localhost:3000</a>
+          </div>
+          <p style="color:#64748b;font-size:0.85rem;">يمكنك استخدام أي سيرفر محلي آخر تفضله (مثل Live Server في VS Code).</p>
+        `;
+        document.body.appendChild(overlay);
+      });
+    }
+  </script>
+</head>
+<body class="login-body">
+  <!-- Dynamic blurred background decoration -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <div class="login-card-container">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="logo-badge">22</div>
+        <h1>22Card Admin</h1>
+        <p>Enter your super admin credentials to access the platform control center.</p>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="email">Admin Email</label>
+          <input type="email" id="email" required placeholder="admin@22card.com">
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required placeholder="••••••••">
+        </div>
+
+        <button type="submit" class="btn-primary" id="submit-btn">
+          <span>Authenticate</span>
+          <div class="spinner hidden" id="btn-spinner"></div>
+        </button>
+      </form>
+      
+      <div class="error-msg hidden" id="error-banner"></div>
+      
+      <div class="login-footer">
+        <button id="toggle-config-btn" class="btn-link">⚙️ Firebase Config Setup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expandable Firebase Configuration Override Modal -->
+  <div id="config-modal" class="modal hidden">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h2>Firebase Config Setup</h2>
+        <button id="close-config-btn" class="close-btn">&times;</button>
+      </div>
+      <p class="modal-desc">
+        No code changes required! Paste your Firebase web configuration JSON here to connect this dashboard to your Firebase project.
+      </p>
+      <div class="form-group">
+        <label for="config-json">Firebase Web Config JSON</label>
+        <textarea id="config-json" rows="8" placeholder='{
+  "apiKey": "AIzaSy...",
+  "authDomain": "...",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+      </div>
+      <div class="modal-actions">
+        <button id="save-config-btn" class="btn-primary">Save & Reload</button>
+        <button id="reset-config-btn" class="btn-secondary">Reset to Default</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main logic module -->
+  <script type="module">
+    import { auth } from "./js/firebase-config.js";
+    import { signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    const loginForm = document.getElementById("login-form");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const errorBanner = document.getElementById("error-banner");
+    const submitBtn = document.getElementById("submit-btn");
+    const btnSpinner = document.getElementById("btn-spinner");
+
+    // Check if already logged in and redirect to admin.html
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Redirection
+        window.location.href = "admin.html";
+      }
+    });
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      
+      errorBanner.classList.add("hidden");
+      submitBtn.disabled = true;
+      btnSpinner.classList.remove("hidden");
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        // Successful login triggers redirect via auth state observer
+      } catch (err) {
+        console.error(err);
+        submitBtn.disabled = false;
+        btnSpinner.classList.add("hidden");
+        errorBanner.textContent = "Authentication Failed: " + err.message;
+        errorBanner.classList.remove("hidden");
+      }
+    });
+
+    // Config Panel Logic
+    const configModal = document.getElementById("config-modal");
+    const toggleConfigBtn = document.getElementById("toggle-config-btn");
+    const closeConfigBtn = document.getElementById("close-config-btn");
+    const configJsonTextarea = document.getElementById("config-json");
+    const saveConfigBtn = document.getElementById("save-config-btn");
+    const resetConfigBtn = document.getElementById("reset-config-btn");
+
+    toggleConfigBtn.addEventListener("click", () => {
+      const savedConfig = localStorage.getItem("firebase_config_override");
+      if (savedConfig) {
+        configJsonTextarea.value = JSON.stringify(JSON.parse(savedConfig), null, 2);
+      } else {
+        configJsonTextarea.value = "";
+      }
+      configModal.classList.remove("hidden");
+    });
+
+    closeConfigBtn.addEventListener("click", () => {
+      configModal.classList.add("hidden");
+    });
+
+    saveConfigBtn.addEventListener("click", () => {
+      try {
+        const rawJson = configJsonTextarea.value.trim();
+        if (!rawJson) {
+          alert("Please enter a valid JSON config.");
+          return;
+        }
+        const parsed = JSON.parse(rawJson);
+        if (!parsed.apiKey || !parsed.projectId) {
+          alert("Invalid config: Config must contain at least 'apiKey' and 'projectId'.");
+          return;
+        }
+        localStorage.setItem("firebase_config_override", JSON.stringify(parsed));
+        alert("Configuration saved! Reloading page...");
+        window.location.reload();
+      } catch (err) {
+        alert("Failed to parse JSON configuration: " + err.message);
+      }
+    });
+
+    resetConfigBtn.addEventListener("click", () => {
+      localStorage.removeItem("firebase_config_override");
+      alert("Config reset to defaults. Reloading...");
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>

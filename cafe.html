@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>22Card - Mobile Loyalty Card</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/customer.css">
+</head>
+<body>
+
+  <!-- Dynamic Loader Overlay -->
+  <div id="loader" class="loader-overlay">
+    <div class="spinner"></div>
+    <p>Loading stamp card...</p>
+  </div>
+
+  <!-- Cafe Not Found Screen -->
+  <div id="error-screen" class="error-container hidden">
+    <div class="error-badge">⚠️</div>
+    <h2>Cafe Not Found</h2>
+    <p>We couldn't retrieve the loyalty card for this address. Please scan the QR code at your checkout counter again.</p>
+  </div>
+
+  <!-- Primary App Container -->
+  <div id="app" class="app-container hidden">
+    <!-- Header with logo and name -->
+    <header class="portal-header">
+      <div id="cafe-logo-placeholder" class="logo-circle">C</div>
+      <img id="cafe-logo-img" src="" alt="Cafe Logo" class="logo-img hidden">
+      <h1 id="cafe-name">Cafe Name</h1>
+    </header>
+
+    <!-- ================= STATE A: AUTHENTICATION FORM ================= -->
+    <div id="customer-auth-panel" class="portal-card auth-card hidden">
+      <div class="auth-toggle-headers">
+        <button id="toggle-signin-btn" class="active">Sign In</button>
+        <button id="toggle-signup-btn">Join Program</button>
+      </div>
+
+      <!-- Sign In Form -->
+      <form id="customer-signin-form" class="auth-form">
+        <div class="form-group">
+          <label for="signin-email">Your Email</label>
+          <input type="email" id="signin-email" required placeholder="name@email.com">
+        </div>
+        <div class="form-group">
+          <label for="signin-password">Password</label>
+          <input type="password" id="signin-password" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn-primary auth-submit-btn">
+          <span>Log In to Card</span>
+        </button>
+      </form>
+
+      <!-- Sign Up Form -->
+      <form id="customer-signup-form" class="auth-form hidden">
+        <div class="form-group">
+          <label for="signup-email">Your Email Address</label>
+          <input type="email" id="signup-email" required placeholder="name@email.com">
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Choose Password</label>
+          <input type="password" id="signup-password" required placeholder="At least 6 characters" minlength="6">
+        </div>
+        <button type="submit" class="btn-primary auth-submit-btn">
+          <span>Register & Start Collecting</span>
+        </button>
+      </form>
+      
+      <div id="customer-auth-error" class="error-banner hidden"></div>
+    </div>
+
+    <!-- ================= STATE B: DIGITAL STAMP CARD ================= -->
+    <div id="customer-card-panel" class="portal-card card-panel hidden">
+      <div class="reward-ribbon">
+        <span class="ribbon-label">Customer loyalty Card</span>
+      </div>
+      
+      <div class="reward-desc-box">
+        <p id="reward-description">Reward Description</p>
+      </div>
+
+      <!-- Dynamic Stamp Slots -->
+      <div id="stamps-grid" class="stamps-grid">
+        <!-- JS builds stamp nodes dynamically -->
+      </div>
+
+      <div class="card-footer">
+        <div class="progress-bar-container">
+          <div id="progress-bar-fill" class="progress-bar-fill"></div>
+        </div>
+        <p id="stamps-status-label">0 / 8 Stamps Collected</p>
+      </div>
+
+      <!-- Maximum stamps reward container -->
+      <div id="reward-earned-container" class="reward-earned hidden">
+        <div class="reward-star">🏆</div>
+        <h3>REWARD READY!</h3>
+        <p>Show this screen to the cashier at checkout to claim your reward.</p>
+      </div>
+
+      <div class="account-actions">
+        <p>Logged in as: <span id="customer-email-display" style="font-weight: 600;">...</span></p>
+        <button id="customer-logout-btn" class="btn-link">Logout Account</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/customer.js"></script>
+</body>
+</html>

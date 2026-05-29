@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>22Card - Super Admin Dashboard</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/admin.css">
+  <!-- Local file security check -->
+  <script>
+    if (window.location.protocol === 'file:') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.background = '#0b0f19';
+        overlay.style.color = '#fff';
+        overlay.style.zIndex = '999999';
+        overlay.style.display = 'flex';
+        overlay.style.flexDirection = 'column';
+        overlay.style.justifyContent = 'center';
+        overlay.style.alignItems = 'center';
+        overlay.style.fontFamily = "'Outfit', sans-serif";
+        overlay.style.padding = '30px';
+        overlay.style.textAlign = 'center';
+        overlay.innerHTML = `
+          <div style="font-size:3.5rem;margin-bottom:20px;filter:drop-shadow(0 0 10px rgba(242,92,84,0.5));">⚠️</div>
+          <h2 style="margin-bottom:15px;color:#f25c54;font-size:1.8rem;font-weight:700;">خطأ أمني في المتصفح (Browser CORS Block)</h2>
+          <p style="max-width:600px;line-height:1.6;color:#94a3b8;margin-bottom:25px;font-size:1.05rem;">
+            لقد قمت بفتح هذا الملف مباشرة بالنقر المزدوج (بروتوكول <code style="color:#f8ad9d;background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;font-family:monospace;">file://</code>). 
+            المتصفحات الحديثة تمنع تشغيل وحدات Firebase البرمجية بشكل مباشر لأسباب أمنية.
+          </p>
+          <div style="background:rgba(255,255,255,0.03);padding:20px 25px;border-radius:16px;border:1px solid rgba(255,255,255,0.08);margin-bottom:25px;text-align:left;font-family:monospace;max-width:500px;width:100%;">
+            <p style="color:#10b981;margin-bottom:8px;font-weight:bold;"># لتشغيل البرنامج محلياً بشكل صحيح:</p>
+            <p style="color:#e2e8f0;margin-bottom:4px;font-size:0.9rem;">1. افتح موجه الأوامر (CMD / PowerShell) في مجلد المشروع.</p>
+            <p style="color:#e2e8f0;margin-bottom:12px;font-size:0.9rem;">2. قم بتشغيل الخادم المحلي بالأمر التالي:</p>
+            <div style="background:rgba(0,0,0,0.4);padding:10px 15px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);color:#fff;margin-bottom:12px;user-select:all;cursor:pointer;">
+              npx http-server -p 3000
+            </div>
+            <p style="color:#e2e8f0;font-size:0.9rem;">3. افتح الرابط التالي في المتصفح:</p>
+            <a href="http://localhost:3000" target="_blank" style="color:#f25c54;text-decoration:underline;font-weight:bold;font-size:0.95rem;">http://localhost:3000</a>
+          </div>
+          <p style="color:#64748b;font-size:0.85rem;">يمكنك استخدام أي سيرفر محلي آخر تفضله (مثل Live Server في VS Code).</p>
+        `;
+        document.body.appendChild(overlay);
+      });
+    }
+  </script>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <header class="admin-navbar">
+    <div class="navbar-brand">
+      <div class="logo-badge">22</div>
+      <h2>22Card Super Control</h2>
+    </div>
+    <div class="navbar-user">
+      <span id="admin-email-display">Loading...</span>
+      <button id="logout-btn" class="btn-link">🚪 Logout</button>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <!-- Statistics Cards -->
+    <section class="stats-grid">
+      <div class="stat-card glass">
+        <div class="stat-icon">🏪</div>
+        <div class="stat-info">
+          <h3>Registered Cafes</h3>
+          <div class="stat-number" id="stat-total-cafes">0</div>
+        </div>
+      </div>
+      <div class="stat-card glass">
+        <div class="stat-icon">👥</div>
+        <div class="stat-info">
+          <h3>Cafe Owners</h3>
+          <div class="stat-number" id="stat-total-owners">0</div>
+        </div>
+      </div>
+      <div class="stat-card glass">
+        <div class="stat-icon">⚙️</div>
+        <div class="stat-info">
+          <h3>Platform Status</h3>
+          <div class="stat-number" style="color: var(--success); font-size: 1.4rem; padding-top: 5px;">Active (Firebase)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace Grid -->
+    <section class="dashboard-grid">
+      <!-- Create Cafe Form -->
+      <div class="panel-card glass">
+        <h2 class="panel-title">Add New Cafe</h2>
+        <form id="create-cafe-form">
+          <div class="form-group">
+            <label for="cafe-name">Cafe Name</label>
+            <input type="text" id="cafe-name" required placeholder="e.g. Starbucks London" autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label for="cafe-slug">Custom Slug / ID</label>
+            <input type="text" id="cafe-slug" required placeholder="e.g. starbucks-london" autocomplete="off">
+            <small style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px; display: block;">
+              Used for Customer Portal URL: <code>cafe.html?id=slug</code>
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="owner-email">Owner Email Address</label>
+            <input type="email" id="owner-email" required placeholder="e.g. manager@starbucks.com">
+          </div>
+
+          <div class="form-group">
+            <label for="owner-password">Initial Password</label>
+            <input type="password" id="owner-password" required placeholder="••••••••" minlength="6">
+          </div>
+
+          <button type="submit" class="btn-primary" id="create-btn">
+            <span>Register Cafe Tenant</span>
+            <div class="spinner hidden" id="create-spinner"></div>
+          </button>
+        </form>
+        <div id="form-error" class="error-msg hidden"></div>
+      </div>
+
+      <!-- Cafe Directory Table -->
+      <div class="panel-card glass">
+        <h2 class="panel-title">Cafe Directories</h2>
+        <div class="table-responsive">
+          <table class="cafe-table">
+            <thead>
+              <tr>
+                <th width="40">Logo</th>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Owner Email</th>
+                <th width="100">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cafe-table-body">
+              <tr>
+                <td colspan="5" class="empty-state">
+                  <div class="spinner" style="margin: 0 auto;"></div>
+                  <p style="margin-top: 10px;">Retrieving registered tenants...</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Delete Cafe Modal Confirmation -->
+  <div id="delete-modal" class="modal hidden">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h2>Confirm Deletion</h2>
+        <button id="close-delete-btn" class="close-btn">&times;</button>
+      </div>
+      <p class="modal-desc" style="color: var(--danger);">
+        ⚠️ WARNING: Deleting this cafe will remove its record from Firestore. The owner won't be able to access the panel, and customers won't be able to fetch their cards. Auth account deletion must be handled manually from the Firebase Console.
+      </p>
+      <div class="form-group">
+        <label>Type the Cafe Slug to confirm deletion: <span id="delete-confirm-slug" style="font-weight: 800; color: #fff; font-family: monospace;"></span></label>
+        <input type="text" id="delete-confirm-input" placeholder="Type slug here..." autocomplete="off">
+      </div>
+      <div class="modal-actions">
+        <button id="confirm-delete-btn" class="btn-primary" style="background: var(--danger);" disabled>Confirm Delete</button>
+        <button id="cancel-delete-btn" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script entry -->
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
